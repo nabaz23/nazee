@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Exam Portal</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 
+      Load TensorFlow.js and the MediaPipe Face Detection model.
+      This is required for the proctoring feature.
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.20.0/dist/tf-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.20.0/dist/tf-converter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.20.0/dist/tf-backend-webgl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.2/dist/face-detection.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Hide scrollbar for cleaner look */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
+
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-green-600 to-green-800 text-white p-6">
+            <h1 class="text-3xl font-bold text-center">Nigeria Current Affairs Exam</h1>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="p-6 md:p-10">
+
+            <!-- Page 1: Welcome Screen -->
+            <div id="welcome-page">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Welcome, Candidate</h2>
+                <p class="text-gray-600 mb-6">You are about to begin a timed exam on current affairs in Nigeria. Please read the instructions carefully before you proceed.</p>
+                
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 space-y-4">
+                    <div class="flex items-start">
+                        <svg class="w-6 h-6 text-green-600 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <div>
+                            <h3 class="text-lg font-semibold">Time Limit</h3>
+                            <p class="text-gray-600">You will have exactly <strong class="text-red-600">30 minutes</strong> to complete the exam.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <svg class="w-6 h-6 text-green-600 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h.01M15 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                        <div>
+                            <h3 class="text-lg font-semibold">Number of Questions</h3>
+                            <p class="text-gray-600">The exam consists of <strong class="text-gray-800">50 multiple-choice questions</strong>.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <svg class="w-6 h-6 text-red-600 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <div>
+                            <h3 class="text-lg font-semibold">Proctoring Enabled</h3>
+                            <p class="text-gray-600">This exam is proctored. Your camera will be active, and the system will monitor for:
+                                <ul class="list-disc list-inside ml-4 text-sm text-gray-500">
+                                    <li>Switching to other browser tabs</li>
+                                    <li>Your face not being visible to the camera</li>
+                                </ul>
+                                Receiving <strong class="text-red-600">3 warnings</strong> will result in automatic submission.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="start-check-btn" class="mt-8 w-full bg-green-600 text-white py-3 px-6 rounded-lg text-lg font-semibold hover:bg-green-700 transition duration-300">
+                    Proceed to Camera Check
+                </button>
+            </div>
+
+            <!-- Page 2: Camera Check -->
+            <div id="camera-check-page" class="hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Camera & Verification</h2>
+                <p class="text-gray-600 mb-6">Please position your face clearly in the center of the video feed. The proctoring system is loading.</p>
+                
+                <div class="bg-black rounded-lg overflow-hidden shadow-inner w-full max-w-lg mx-auto aspect-video">
+                    <video id="camera-feed-check" autoplay playsinline class="w-full h-full object-cover"></video>
+                </div>
+                <p id="camera-error" class="text-red-600 text-center mt-2 hidden">Could not access camera. Please allow camera permissions and refresh the page.</p>
+                <p id="model-loading-status" class="text-blue-600 text-center mt-2 font-semibold">Loading proctoring model, please wait...</p>
+                
+                <div class="mt-6 text-center">
+                    <p class="text-gray-700 mb-4">By clicking "Start Exam", you confirm your identity and agree to the proctoring rules.</p>
+                    <button id="start-exam-btn" class="w-full md:w-auto bg-green-600 text-white py-3 px-10 rounded-lg text-lg font-semibold hover:bg-green-700 transition duration-300 disabled:bg-gray-400" disabled>
+                        Loading...
+                    </button>
+                </div>
+            </div>
+
+            <!-- Page 3: Exam -->
+            <div id="exam-page" class="hidden">
+                <!-- Exam Header -->
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <!-- Warnings -->
+                    <div class="flex items-center bg-yellow-100 text-yellow-800 font-bold py-3 px-6 rounded-lg order-2 md:order-1">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        Warnings: <span id="warning-count" class="text-2xl ml-2">0</span> / 3
+                    </div>
+
+                    <!-- Question Count -->
+                    <div class="text-lg font-semibold text-gray-700 order-1 md:order-2">
+                        Question <span id="question-number" class="text-2xl font-bold text-green-700">1</span> / 50
+                    </div>
+
+                    <!-- Timer -->
+                    <div class="flex items-center bg-red-100 text-red-700 font-bold py-3 px-6 rounded-lg order-3">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Time Left: <span id="timer" class="text-2xl ml-2">30:00</span>
+                    </div>
+                </div>
+
+                <!-- Proctoring Video -->
+                <div class="fixed top-4 right-4 w-32 h-24 bg-black rounded-lg shadow-lg overflow-hidden border-2 border-white z-50">
+                    <video id="camera-feed-exam" autoplay playsinline class="w-full h-full object-cover"></video>
+                </div>
+
+                <!-- Question Area -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 md:p-8">
+                    <h3 id="question-text" class="text-xl md:text-2xl font-semibold text-gray-900 mb-6"></h3>
+                    <div id="options-container" class="space-y-4">
+                        <!-- Options will be dynamically inserted here -->
+                    </div>
+                </div>
+
+                <!-- Navigation -->
+                <div class="flex justify-between mt-8">
+                    <button id="prev-btn" class="bg-gray-500 text-white py-2 px-8 rounded-lg font-semibold hover:bg-gray-600 transition duration-300">
+                        Previous
+                    </button>
+                    <button id="next-btn" class="bg-green-600 text-white py-2 px-8 rounded-lg font-semibold hover:bg-green-700 transition duration-300">
+                        Next
+                    </button>
+                    <button id="submit-btn" class="hidden bg-blue-600 text-white py-2 px-8 rounded-lg font-semibold hover:bg-blue-700 transition duration-300">
+                        Submit Exam
+                    </button>
+                </div>
+            </div>
+
+            <!-- Page 4: Results -->
+            <div id="results-page" class="hidden text-center">
+                <h2 id="results-title" class="text-3xl font-bold text-gray-800 mb-4">Exam Completed!</h2>
+                <p id="results-subtitle" class="text-lg text-gray-600 mb-8">Your results are calculated below.</p>
+                <div class="bg-green-100 border-2 border-green-300 rounded-lg p-10 w-full max-w-md mx-auto">
+                    <p class="text-xl text-green-800 mb-2">You Scored:</p>
+                    <div class="text-6xl font-bold text-green-600">
+                        <span id="score">0</span> / 50
+                    </div>
+                    <p class="text-2xl font-semibold text-green-700 mt-2">
+                        <span id="score-percentage">0</span>%
+                    </p>
+                </div>
+                <button id="restart-btn" class="mt-10 bg-green-600 text-white py-3 px-10 rounded-lg text-lg font-semibold hover:bg-green-700 transition duration-300">
+                    Take Exam Again
+                </button>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Warning Modal -->
+    <div id="warning-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl text-center max-w-md w-full">
+            <h2 class="text-3xl font-bold text-red-600 mb-4">WARNING!</h2>
+            <p id="warning-message" class="text-lg text-gray-700 mb-6"></p>
+            <p class="text-base text-gray-500 mb-6">You have <span id="warning-modal-count" class="font-bold">1</span> of 3 warnings. Exceeding 3 warnings will automatically submit your exam.</p>
+            <button id="close-warning-btn" class="mt-6 bg-red-600 text-white py-2 px-8 rounded-lg font-semibold text-lg hover:bg-red-700">
+                I Understand
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Page Elements
+            const welcomePage = document.getElementById('welcome-page');
+            const cameraCheckPage = document.getElementById('camera-check-page');
+            const examPage = document.getElementById('exam-page');
+            const resultsPage = document.getElementById('results-page');
+
+            // Button Elements
+            const startCheckBtn = document.getElementById('start-check-btn');
+            const startExamBtn = document.getElementById('start-exam-btn');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const submitBtn = document.getElementById('submit-btn');
+            const restartBtn = document.getElementById('restart-btn');
+
+            // Camera Elements
+            const videoCheck = document.getElementById('camera-feed-check');
+            const videoExam = document.getElementById('camera-feed-exam');
+            const cameraError = document.getElementById('camera-error');
+            const modelLoadingStatus = document.getElementById('model-loading-status');
+            let cameraStream = null;
+
+            // Exam Elements
+            const timerEl = document.getElementById('timer');
+            const questionNumberEl = document.getElementById('question-number');
+            const questionTextEl = document.getElementById('question-text');
+            const optionsContainer = document.getElementById('options-container');
+
+            // Results Elements
+            const resultsTitle = document.getElementById('results-title');
+            const resultsSubtitle = document.getElementById('results-subtitle');
+            const scoreEl = document.getElementById('score');
+            const scorePercentageEl = document.getElementById('score-percentage');
+
+            // Proctoring Elements
+            const warningCountEl = document.getElementById('warning-count');
+            const warningModal = document.getElementById('warning-modal');
+            const warningMessageEl = document.getElementById('warning-message');
+            const warningModalCountEl = document.getElementById('warning-modal-count');
+            const closeWarningBtn = document.getElementById('close-warning-btn');
+
+            // Exam State
+            let currentQuestion = 0;
+            let userAnswers = [];
+            let timerInterval = null;
+            let timeLeft = 30 * 60; // 30 minutes in seconds
+
+            // Proctoring State
+            let proctoringModel = null;
+            let warningCount = 0;
+            const maxWarnings = 3;
+            let proctoringInterval = null;
+            let isModalOpen = false;
+
+            // --- Question Bank (Same as before) ---
+            const questionBank = [
+                { question: "Who is the current President of Nigeria (as of 2025)?", options: ["Muhammadu Buhari", "Bola Tinubu", "Atiku Abubakar", "Peter Obi"], answer: "Bola Tinubu" },
+                { question: "Who is the current Governor of the Central Bank of Nigeria (CBN)?", options: ["Godwin Emefiele", "Sanusi Lamido Sanusi", "Olayemi Cardoso", "Charles Soludo"], answer: "Olayemi Cardoso" },
+                { question: "Nigeria's Democracy Day is celebrated on which date?", options: ["October 1", "May 29", "June 12", "January 15"], answer: "June 12" },
+                { question: "Who is the current Chief of Justice of Nigeria?", options: ["Walter Onnoghen", "Tanko Muhammad", "Olukayode Ariwoola", "Ibrahim Muhammad"], answer: "Olukayode Ariwoola" },
+                { question: "What is the name of President Bola Tinubu's economic and development agenda?", options: ["Renewed Hope Agenda", "Next Level Agenda", "Change Agenda", "Vision 20:2020"], answer: "Renewed Hope Agenda" },
+                { question: "Who is the current Inspector-General of Police (IGP) in Nigeria?", options: ["Mohammed Adamu", "Usman Alkali Baba", "Kayode Egbetokun", "Ibrahim Idris"], answer: "Kayode Egbetokun" },
+                { question: "In the 2023 African Cup of Nations (AFCON) played in 2024, Nigeria's Super Eagles finished in what position?", options: ["First Place (Winners)", "Second Place (Runners-up)", "Third Place", "Fourth Place"], answer: "Second Place (Runners-up)" },
+                { question: "What major economic policy change was implemented by the Tinubu administration shortly after taking office in 2023?", options: ["Introduction of fuel subsidy", "Removal of fuel subsidy", "Closing all land borders", "Adoption of the Eco currency"], answer: "Removal of fuel subsidy" },
+                { question: "As of late 2024/2025, what has been the most significant economic challenge facing Nigeria?", options: ["Currency deflation", "Low unemployment", "High inflation and cost of living crisis", "A major banking collapse"], answer: "High inflation and cost of living crisis" },
+                { question: "Who is the current Speaker of Nigeria's House of Representatives?", options: ["Femi Gbajabiamila", "Tajudeen Abbas", "Akinwunmi Ambode", "Godswill Akpabio"], answer: "Tajudeen Abbas" },
+                { question: "Who is the current President of the Nigerian Senate?", options: ["Ahmad Lawan", "Bukola Saraki", "David Mark", "Godswill Akpabio"], answer: "Godswill Akpabio" },
+                { question: "Nnamdi Kanu is the leader of which separatist group in Nigeria?", options: ["Boko Haram", "IPOB", "MASSOB", "Niger Delta Avengers"], answer: "IPOB" },
+                { question: "The World Bank approved a $500 million loan in late 2025 for what Nigerian project?", options: ["Lagos-Calabar Coastal Highway", "Mambilla Power Project", "Building Resilient Digital Infrastructure (BRIDGE)", "Ajaokuta Steel Mill Revitalization"], answer: "Building Resilient Digital Infrastructure (BRIDGE)" },
+                { question: "What is the name of the Islamist insurgent group primarily active in Nigeria's Northeast region?", options: ["IPOB", "Bandits", "Boko Haram / ISWAP", "Area Boys"], answer: "Boko Haram / ISWAP" },
+                { question: "The 'Banditry' crisis, involving large-scale kidnappings and rural violence, is most prevalent in which two geopolitical zones?", options: ["South-South and South-East", "North-West and North-Central", "North-East and South-West", "South-West and North-Central"], answer: "North-West and North-Central" },
+                { question: "Who is the GCEO of the Nigerian National Petroleum Corporation (NNPC) Limited (as of late 2025)?", options: ["Mele Kyari", "Ibe Kachikwu", "Bashir Bayo Ojulari", "Diezani Alison-Madueke"], answer: "Bashir Bayo Ojulari" },
+                { question: "What major infrastructure project aims to connect Lagos to Calabar?", options: ["Second Niger Bridge", "Lagos-Kano Railway", "Lagos-Calabar Coastal Highway", "East-West Road"], answer: "Lagos-Calabar Coastal Highway" },
+                { question: "The tenure of the current INEC Chairman, Mahmood Yakubu, is set to expire in what month of 2025?", options: ["January", "June", "August", "November"], answer: "November" },
+                { question: "What is the name of Nigeria's national women's football team?", options: ["Super Eagles", "Super Falcons", "D'Tigress", "Golden Eaglets"], answer: "Super Falcons" },
+                { question: "The conflict between farmers and herders is a major security issue in which region?", options: ["Lagos Island", "Niger Delta", "North-Central (Middle Belt)", "Kainji Dam Area"], answer: "North-Central (Middle Belt)" },
+                { question: "Which Nigerian state was the epicenter of the 2024 abduction of over 200 schoolchildren from Kuriga?", options: ["Borno", "Zamfara", "Kaduna", "Plateau"], answer: "Kaduna" },
+                { question: "What is the standard VAT (Value Added Tax) rate in Nigeria as of 2025?", options: ["5%", "7.5%", "10%", "15%"], answer: "7.5%" },
+                { question: "Which Nigerian author's film 'The Black Book' became a major international hit on Netflix in 2023/2024?", options: ["Wole Soyinka", "Chimamanda Ngozi Adichie", "Editi Effiong", "Kunle Afolayan"], answer: "Editi Effiong" },
+                { question: "Who is the current Minister of Finance and Coordinating Minister of the Economy?", options: ["Ngozi Okonjo-I_Wale Edun", "Zainab Ahmed", "Wale Edun", "Kemi Adeosun"], answer: "Wale Edun" },
+                { question: "Nigeria's population is estimated to be over how many people?", options: ["100 million", "150 million", "200 million", "50 million"], answer: "200 million" },
+                { question: "What is the official currency of Nigeria?", options: ["Cedi", "Naira", "Rand", "Dollar"], answer: "Naira" },
+                { question: "The 'Student Loan Bill' was signed into law by President Tinubu to provide interest-free loans to Nigerian students in what year?", options: ["2022", "2023", "2024", "2025"], answer: "2023" },
+                { question: "Which Nigerian city is the administrative capital of the country?", options: ["Lagos", "Kano", "Port Harcourt", "Abuja"], answer: "Abuja" },
+                { question: "Who won the 2023 Nigerian presidential election?", options: ["Atiku Abubakar", "Peter Obi", "Bola Tinubu", "Rabiu Kwankwaso"], answer: "Bola Tinubu" },
+                { question: "What does the acronym 'NNPC' stand for?", options: ["Nigerian National People's Congress", "Nigerian National Petroleum Company", "Nigeria's New Political Chapter", "National Nigerian Pipeline Corporation"], answer: "Nigerian National Petroleum Company" },
+                { question: "Which country hosted the 2023 AFCON (played in 2024)?", options: ["Nigeria", "Cameroon", "Ivory Coast (Côte d'Ivoire)", "Ghana"], answer: "Ivory Coast (Côte d'Ivoire)" },
+                { question: "The 'Sit-at-home' order, which disrupts economic activities, is primarily enforced by separatists in which region?", options: ["North-West", "South-South", "South-East", "North-East"], answer: "South-East" },
+                { question: "Which major Nigerian city is famously the center of the 'Nollywood' film industry?", options: ["Abuja", "Kano", "Lagos", "Enugu"], answer: "Lagos" },
+                { question: "What is the name of Nigeria's national women's basketball team?", options: ["Super Falcons", "D'Tigress", "The Lionesses", "Lady Eagles"], answer: "D'Tigress" },
+                { question: "The Mambilla Power Project is a proposed...?", options: ["Hydroelectric dam", "Nuclear power plant", "Solar farm", "Geothermal plant"], answer: "Hydroelectric dam" },
+                { question: "Who is the current governor of Lagos State?", options: ["Babatunde Fashola", "Babajide Sanwo-Olu", "Akinwunmi Ambode", "Nasir El-Rufai"], answer: "Babajide Sanwo-Olu" },
+                { question: "The 'Second Niger Bridge' connects which two cities/states?", options: ["Lagos and Ibadan", "Onitsha (Anambra) and Asaba (Delta)", "Abuja and Kaduna", "Kano and Maiduguri"], answer: "Onitsha (Anambra) and Asaba (Delta)" },
+                { question: "What does 'ISWAP' stand for?", options: ["Islamic State's West Africa Province", "Independent States of West African People", "Internal Security for West African Provinces", "International Support for West African Peace"], answer: "Islamic State's West Africa Province" },
+                { question: "Which political party is the current ruling party in Nigeria at the federal level?", options: ["PDP (People's Democratic Party)", "LP (Labour Party)", "APC (All Progressives Congress)", "NNPP (New Nigeria Peoples Party)"], answer: "APC (All Progressives Congress)" },
+                { question: "The Dangote Refinery, one of the world's largest single-train refineries, is located in which state?", options: ["Rivers State", "Ogun State", "Lagos State", "Delta State"], answer: "Lagos State" },
+                { question: "Who is the current Minister of the FCT (Federal Capital Territory)?", options: ["Nasir El-Rufai", "Nyesom Wike", "David Umahi", "Babatunde Fashola"], answer: "Nyesom Wike" },
+                { question: "How many geopolitical zones are in Nigeria?", options: ["4", "6", "8", "12"], answer: "6" },
+                { question: "The Nigerian government has been in a long-running legal battle in the UK over the rights to an oil block known as...?", options: ["OPL 245 (Malabu)", "Agbami Field", "Bonga Field", "Forcados Terminal"], answer: "OPL 245 (Malabu)" },
+                { question: "Which Nigerian athlete broke the world record in the 100m hurdles in 2022?", options: ["Blessing Okagbare", "Tobi Amusan", "Ese Brume", "Chioma Ajunwa"], answer: "Tobi Amusan" },
+                { question: "What is the primary objective of the 'Eco', the proposed currency for ECOWAS?", options: ["To replace the US Dollar globally", "To create a common currency for West African states", "To replace the Naira in Nigeria only", "To fund infrastructure projects"], answer: "To create a common currency for West African states" },
+                { question: "Who is the current chairman of the Economic and Financial Crimes Commission (EFCC)?", options: ["Ibrahim Magu", "Abdulrasheed Bawa", "Ola Olukoyede", "Nuhu Ribadu"], answer: "Ola Olukoyede" },
+                { question: "Which Nigerian artist won the Grammy for Best Global Music Album in 2023?", options: ["Burna Boy", "Wizkid", "Davido", "Tems"], answer: "Burna Boy" },
+                { question: "The high-speed rail project announced in 2025 involves a partnership with which country?", options: ["USA", "Germany", "China", "United Kingdom"], answer: "China" },
+                { question: "What is the main security challenge in the South-South (Niger Delta) region?", options: ["Boko Haram", "Banditry", "Oil theft and pipeline vandalism", "Separatist agitation"], answer: "Oil theft and pipeline vandalism" },
+                { question: "Which body is responsible for conducting elections in Nigeria?", options: ["INEC (Independent National Electoral Commission)", "EFCC (Economic and Financial Crimes Commission)", "DSS (Department of State Services)", "NUC (National Universities Commission)"], answer: "INEC (Independent National Electoral Commission)" },
+            ];
+            
+            // --- ML Model Loading ---
+            async function loadProctoringModel() {
+                try {
+                    const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
+                    const detectorConfig = { 
+                        runtime: 'tfjs', 
+                        maxFaces: 1 // Only detect one face
+                    };
+                    proctoringModel = await faceDetection.createDetector(model, detectorConfig);
+                    console.log("Proctoring model loaded.");
+                    modelLoadingStatus.textContent = "Proctoring model loaded successfully.";
+                    startExamBtn.textContent = "Start Exam & Verification";
+                    startExamBtn.disabled = false;
+                } catch (err) {
+                    console.error("Error loading model:", err);
+                    modelLoadingStatus.textContent = "Could not load proctoring model. You can proceed without face detection.";
+                    modelLoadingStatus.classList.remove('text-blue-600');
+                    modelLoadingStatus.classList.add('text-red-600');
+                    startExamBtn.textContent = "Start Exam (No Face-Check)";
+                    startExamBtn.disabled = false; // Allow proceeding without face check
+                }
+            }
+
+            // --- Camera Function ---
+            async function startCamera() {
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    videoCheck.srcObject = cameraStream;
+                    videoExam.srcObject = cameraStream;
+                    cameraError.classList.add('hidden');
+                    // Load the model *after* getting camera permission
+                    loadProctoringModel();
+                } catch (err) {
+                    console.error("Error accessing camera:", err);
+                    cameraError.classList.remove('hidden');
+                    modelLoadingStatus.textContent = "Camera access is required for proctoring.";
+                    modelLoadingStatus.classList.remove('text-blue-600');
+                    modelLoadingStatus.classList.add('text-red-600');
+                    startExamBtn.disabled = true;
+                }
+            }
+
+            // --- Timer Functions ---
+            function startTimer() {
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    if (timeLeft <= 0) {
+                        submitExam(true, false); // Auto-submit when time is up
+                    }
+                }, 1000);
+            }
+
+            function updateTimerDisplay() {
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            function stopTimer() {
+                clearInterval(timerInterval);
+            }
+
+            // --- Proctoring Functions ---
+            function startProctoring() {
+                warningCount = 0;
+                warningCountEl.textContent = warningCount;
+
+                // 1. Start face-checking loop (every 5 seconds)
+                if (proctoringModel) {
+                    proctoringInterval = setInterval(checkFacePresence, 5000);
+                }
+
+                // 2. Add tab-switching listener
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+            }
+
+            function stopProctoring() {
+                clearInterval(proctoringInterval);
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+            }
+
+            async function checkFacePresence() {
+                // Don't check if modal is open, or if model/video isn't ready
+                if (isModalOpen || !proctoringModel || !videoExam || videoExam.readyState < 4) return;
+
+                try {
+                    const faces = await proctoringModel.estimateFaces(videoExam, { flipHorizontal: false });
+                    if (faces.length === 0) {
+                        triggerWarning("Face not detected. Please look at the camera.");
+                    } else {
+                        console.log("Face detected."); // For debugging
+                    }
+                } catch (err) {
+                    console.error("Error during face estimation:", err);
+                }
+            }
+
+            function handleVisibilityChange() {
+                // Only trigger if exam is active and modal is not already open
+                if (document.hidden && !resultsPage.classList.contains('hidden') && !isModalOpen) {
+                    triggerWarning("Do not switch tabs during the exam.");
+                }
+            }
+
+            function triggerWarning(message) {
+                if (isModalOpen) return; // Don't stack warnings
+                isModalOpen = true;
+                warningCount++;
+                warningCountEl.textContent = warningCount;
+                warningMessageEl.textContent = message;
+                warningModalCountEl.textContent = warningCount;
+                warningModal.classList.remove('hidden');
+
+                if (warningCount >= maxWarnings) {
+                    // Force submit
+                    closeWarningBtn.disabled = true;
+                    closeWarningBtn.textContent = "Submitting...";
+                    setTimeout(() => {
+                        warningModal.classList.add('hidden');
+                        submitExam(false, true); // New 'forceSubmit' flag
+                        isModalOpen = false;
+                        closeWarningBtn.disabled = false;
+                        closeWarningBtn.textContent = "I Understand";
+                    }, 2000); // Show modal for 2 secs before submitting
+                }
+            }
+
+            closeWarningBtn.addEventListener('click', () => {
+                warningModal.classList.add('hidden');
+                isModalOpen = false;
+            });
+
+            // --- Exam Functions ---
+            function loadQuestion(qIndex) {
+                const question = questionBank[qIndex];
+                questionTextEl.textContent = question.question;
+                questionNumberEl.textContent = qIndex + 1;
+                optionsContainer.innerHTML = '';
+
+                question.options.forEach(option => {
+                    const isSelected = userAnswers[qIndex] === option;
+                    const button = document.createElement('button');
+                    button.textContent = option;
+                    button.classList.add('w-full', 'text-left', 'p-4', 'rounded-lg', 'border', 'transition', 'duration-200', 'text-gray-700', 'font-medium');
+                    if (isSelected) {
+                        button.classList.add('bg-green-100', 'border-green-400', 'ring-2', 'ring-green-300');
+                    } else {
+                        button.classList.add('bg-white', 'border-gray-300', 'hover:bg-gray-50');
+                    }
+                    button.onclick = () => selectAnswer(qIndex, option);
+                    optionsContainer.appendChild(button);
+                });
+
+                // Update button visibility
+                prevBtn.classList.toggle('hidden', qIndex === 0);
+                nextBtn.classList.toggle('hidden', qIndex === questionBank.length - 1);
+                submitBtn.classList.toggle('hidden', qIndex !== questionBank.length - 1);
+            }
+
+            function selectAnswer(qIndex, answer) {
+                userAnswers[qIndex] = answer;
+                loadQuestion(qIndex); // Reload to show selection
+            }
+
+            function calculateScore() {
+                let score = 0;
+                questionBank.forEach((q, index) => {
+                    if (userAnswers[index] === q.answer) {
+                        score++;
+                    }
+                });
+                return score;
+            }
+
+            function submitExam(isTimeUp = false, isForceSubmit = false) {
+                stopTimer();
+                stopProctoring();
+
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                }
+
+                const finalScore = calculateScore();
+                const percentage = ((finalScore / questionBank.length) * 100).toFixed(0);
+
+                // Customize results message
+                if (isTimeUp) {
+                    resultsTitle.textContent = "Time's Up!";
+                    resultsSubtitle.textContent = "Your exam was submitted automatically as the time ran out.";
+                } else if (isForceSubmit) {
+                    resultsTitle.textContent = "Exam Submitted";
+                    resultsSubtitle.textContent = "Your exam was submitted automatically due to exceeding the warning limit.";
+                } else {
+                    resultsTitle.textContent = "Exam Completed!";
+                    resultsSubtitle.textContent = "Your results are calculated below.";
+                }
+
+                scoreEl.textContent = finalScore;
+                scorePercentageEl.textContent = percentage;
+
+                examPage.classList.add('hidden');
+                resultsPage.classList.remove('hidden');
+            }
+
+            // --- Page Navigation ---
+            startCheckBtn.addEventListener('click', () => {
+                welcomePage.classList.add('hidden');
+                cameraCheckPage.classList.remove('hidden');
+                startCamera();
+            });
+
+            startExamBtn.addEventListener('click', () => {
+                cameraCheckPage.classList.add('hidden');
+                examPage.classList.remove('hidden');
+                userAnswers = new Array(questionBank.length).fill(null);
+                currentQuestion = 0;
+                timeLeft = 30 * 60;
+                loadQuestion(currentQuestion);
+                startTimer();
+                startProctoring();
+            });
+
+            nextBtn.addEventListener('click', () => {
+                if (currentQuestion < questionBank.length - 1) {
+                    currentQuestion++;
+                    loadQuestion(currentQuestion);
+                }
+            });
+
+            prevBtn.addEventListener('click', () => {
+                if (currentQuestion > 0) {
+                    currentQuestion--;
+                    loadQuestion(currentQuestion);
+                }
+            });
+
+            submitBtn.addEventListener('click', () => {
+                // You could add a confirmation modal here in a real app
+                submitExam(false, false);
+            });
+
+            restartBtn.addEventListener('click', () => {
+                resultsPage.classList.add('hidden');
+                welcomePage.classList.remove('hidden');
+            });
+
+        });
+    </script>
+</body>
+</html>
